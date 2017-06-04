@@ -59,6 +59,7 @@ class Scheduler(object):
     """
     def __init__(self):
         self.jobs = []
+        self.jobs_unconfigured = []
 
     def run_pending(self):
         """
@@ -70,6 +71,7 @@ class Scheduler(object):
         increments then your job won't be run 60 times in between but
         only once.
         """
+        self.check_jobs()
         runnable_jobs = (job for job in self.jobs if job.should_run)
         for job in sorted(runnable_jobs):
             self._run_job(job)
@@ -84,11 +86,20 @@ class Scheduler(object):
 
         :param delay_seconds: A delay added between every executed job
         """
+        self.check_jobs()
         logger.info('Running *all* %i jobs with %is delay inbetween',
                     len(self.jobs), delay_seconds)
         for job in self.jobs[:]:
             self._run_job(job)
             time.sleep(delay_seconds)
+
+    def check_jobs(self):
+        """
+        Move all configured jobs from jobs_unconfigured to jobs
+        """
+        for index, job in enumerate(self.jobs_unconfigured):
+            if job.job_func is not None and job.next_run is not None:
+                self.jobs.append(self.jobs_unconfigured.pop(index))
 
     def clear(self, tag=None):
         """
@@ -122,7 +133,7 @@ class Scheduler(object):
         :return: An empty job
         """
         job = Job(interval)
-        self.jobs.append(job)
+        self.jobs_unconfigured.append(job)
         return job
 
     def _run_job(self, job):
@@ -137,6 +148,7 @@ class Scheduler(object):
 
         :return: A :class:`~datetime.datetime` object
         """
+        self.check_jobs()
         if not self.jobs:
             return None
         return min(self.jobs).next_run
